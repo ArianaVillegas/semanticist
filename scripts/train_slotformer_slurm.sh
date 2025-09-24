@@ -28,6 +28,23 @@ module load miniconda/3.0
 eval "$(conda shell.bash hook)"
 conda activate /home/avillegas/miniconda3/envs/semanticist
 
+# Validate environment activation
+echo "=== Environment Validation ==="
+echo "Conda environment: $CONDA_DEFAULT_ENV"
+echo "Python path: $(which python)"
+echo "Python version: $(python --version)"
+if [ "$CONDA_DEFAULT_ENV" != "semanticist" ]; then
+    echo "ERROR: Conda environment not activated properly!"
+    echo "Expected: semanticist, Got: $CONDA_DEFAULT_ENV"
+    exit 1
+fi
+
+# Check required packages
+python -c "import torch, torchvision, timm, lightning; print('✓ All packages available')" || {
+    echo "ERROR: Required packages not found!"
+    exit 1
+}
+
 # Set environment variables for optimal A100 performance
 export CUDA_VISIBLE_DEVICES=0
 export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
