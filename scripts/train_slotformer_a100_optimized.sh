@@ -25,8 +25,9 @@ echo "Memory: $SLURM_MEM_PER_NODE MB"
 echo "GPUs: $SLURM_GPUS_ON_NODE"
 
 # Environment setup
-source ~/miniconda3/etc/profile.d/conda.sh
-conda activate semanticist
+module load miniconda/3.0
+eval "$(conda shell.bash hook)"
+conda activate /home/avillegas/miniconda3/envs/semanticist
 
 # A100-optimized environment variables
 export CUDA_VISIBLE_DEVICES=0,1

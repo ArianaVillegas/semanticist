@@ -24,8 +24,9 @@ echo "GPU: $CUDA_VISIBLE_DEVICES"
 # module load python/3.9
 
 # Activate conda environment
-source ~/miniconda3/etc/profile.d/conda.sh
-conda activate semanticist
+module load miniconda/3.0
+eval "$(conda shell.bash hook)"
+conda activate /home/avillegas/miniconda3/envs/semanticist
 
 # Set environment variables for optimal A100 performance
 export CUDA_VISIBLE_DEVICES=0
