@@ -10,3 +10,69 @@ build
 *.ttf
 *.so
 .nfs*
+
+# Video files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+*.flv
+*.webm
+*.m4v
+*.3gp
+*.ogv
+
+# Audio files
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+*.wma
+
+# Large image files and datasets
+*.tiff
+*.tif
+*.bmp
+*.raw
+*.cr2
+*.nef
+*.arw
+
+# Compressed archives
+*.tar
+*.tar.gz
+*.tar.bz2
+*.rar
+*.7z
+*.gz
+*.bz2
+
+# Large data files
+*.h5
+*.hdf5
+*.npz
+*.pkl
+*.pickle
+*.bin
+*.dat
+
+# Temporary and log files
+*.log
+*.tmp
+*.temp
+*~
+.DS_Store
+Thumbs.db
+
+# Data
+datasets
+results
+validation
+video_output_test
+dora_videos
+full_dora_experiments
+long_form_experiments
+video_token_analysis
+video_samples
