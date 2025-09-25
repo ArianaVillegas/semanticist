@@ -21,11 +21,12 @@ torch.backends.cudnn.benchmark = True
 NUM_SLOTS = 256  # Increased for A100 memory
 TRANSFORMER_LAYERS = 6  # Deeper model for A100
 MODELS = {
-    "dinov2": "vit_base_patch14_dinov2",
-    "dinov2_large": "vit_large_patch14_dinov2",
+    "dinov2_base": "vit_base_patch14_dinov2",
+    "dinov2_large": "vit_large_patch14_dinov2",  # Best choice - similar to DINOv3
+    "dinov2_giant": "vit_giant_patch14_dinov2",  # Largest available
     "dino": "vit_base_patch16_224.dino",
 }
-ENCODER_NAME = MODELS["dinov2"]  # Use available model
+ENCODER_NAME = MODELS["dinov2_large"]  # Use large model for A100
 
 # A100-Optimized Training Parameters
 BATCH_SIZE = 512  # Large batch for A100 40GB
