@@ -22,10 +22,10 @@ NUM_SLOTS = 256  # Increased for A100 memory
 TRANSFORMER_LAYERS = 6  # Deeper model for A100
 MODELS = {
     "dinov2": "vit_base_patch14_dinov2",
-    "dinov3": "vit_base_patch16_dinov3",
     "dinov2_large": "vit_large_patch14_dinov2",
+    "dino": "vit_base_patch16_224.dino",
 }
-ENCODER_NAME = MODELS["dinov2_large"]  # Larger model for A100
+ENCODER_NAME = MODELS["dinov2"]  # Use available model
 
 # A100-Optimized Training Parameters
 BATCH_SIZE = 512  # Large batch for A100 40GB

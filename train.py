@@ -15,9 +15,9 @@ TRANSFORMER_LAYERS = 3  # Number of processing layers in generator/reconstructor
 MODELS = {
     "dino": "vit_base_patch16_224.dino",
     "dinov2": "vit_base_patch14_dinov2",
-    "dinov3": "vit_base_patch16_dinov3",
+    "dinov2_base": "vit_base_patch14_dinov2",
 }
-ENCODER_NAME = MODELS["dinov3"]
+ENCODER_NAME = MODELS["dinov2_base"]
 # Training
 BATCH_SIZE = 256
 LEARNING_RATE = 3e-4
