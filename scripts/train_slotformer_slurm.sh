@@ -26,22 +26,39 @@ echo "GPU: $CUDA_VISIBLE_DEVICES"
 # Activate conda environment
 module load miniconda/3.0
 eval "$(conda shell.bash hook)"
-conda activate /home/avillegas/miniconda3/envs/semanticist
+source activate /home/avillegas/miniconda3/envs/semanticist
 
 # Validate environment activation
 echo "=== Environment Validation ==="
 echo "Conda environment: $CONDA_DEFAULT_ENV"
 echo "Python path: $(which python)"
 echo "Python version: $(python --version)"
+echo "Conda prefix: $CONDA_PREFIX"
+
+# Ensure we're using conda python
+export PATH="$CONDA_PREFIX/bin:$PATH"
+echo "Updated Python path: $(which python)"
+
 if [ "$CONDA_DEFAULT_ENV" != "semanticist" ]; then
     echo "ERROR: Conda environment not activated properly!"
     echo "Expected: semanticist, Got: $CONDA_DEFAULT_ENV"
     exit 1
 fi
 
+# Check if python path contains conda environment
+if [[ "$(which python)" != *"semanticist"* ]]; then
+    echo "WARNING: Python path doesn't contain semanticist environment"
+    echo "Forcing conda python path..."
+    export PATH="/home/avillegas/miniconda3/envs/semanticist/bin:$PATH"
+    echo "New Python path: $(which python)"
+fi
+
 # Check required packages
 python -c "import torch, torchvision, timm, lightning; print('✓ All packages available')" || {
     echo "ERROR: Required packages not found!"
+    echo "Available packages:"
+    python -c "import sys; print('Python executable:', sys.executable)"
+    conda list | grep -E "(torch|timm|lightning)"
     exit 1
 }
 
