@@ -167,7 +167,7 @@ def train():
 
     # A100-optimized data loading
     transform = torchvision.transforms.Compose([
-        torchvision.transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
+        torchvision.transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),  # DINOv3 expects 224x224
         torchvision.transforms.RandomHorizontalFlip(p=0.5),
         torchvision.transforms.ColorJitter(0.1, 0.1, 0.1, 0.05),
         torchvision.transforms.ToTensor(),

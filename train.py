@@ -14,11 +14,10 @@ NUM_SLOTS = 128  # K: Number of slots to generate
 TRANSFORMER_LAYERS = 3  # Number of processing layers in generator/reconstructor
 MODELS = {
     "dino": "vit_base_patch16_224.dino",
-    "dinov2_base": "vit_base_patch14_dinov2",
-    "dinov2_large": "vit_large_patch14_dinov2",  # Best available - similar to DINOv3
-    "dinov2_giant": "vit_giant_patch14_dinov2",  # Largest available
+    "dinov2": "vit_base_patch14_dinov2",
+    "dinov3": "vit_base_patch16_dinov3",
 }
-ENCODER_NAME = MODELS["dinov2_large"]  # Use large model for better performance
+ENCODER_NAME = MODELS["dinov3"]
 # Training
 BATCH_SIZE = 256
 LEARNING_RATE = 3e-4
@@ -131,7 +130,7 @@ def train():
 
     transform = torchvision.transforms.Compose(
         [
-            torchvision.transforms.RandomResizedCrop(224),
+            torchvision.transforms.RandomResizedCrop(224),  # DINOv3 expects 224x224
             torchvision.transforms.RandomHorizontalFlip(),
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(
