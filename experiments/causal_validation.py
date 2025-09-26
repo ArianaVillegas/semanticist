@@ -36,11 +36,12 @@ class CausalValidationExperiments:
         # 1. Random Baseline - slots in random order
         class RandomSlotFormer(SlotFormer):
             def forward_slots(self, patch_tokens, num_slots):
+                device = patch_tokens.device
                 # Generate slots normally
                 slots = self.generator(
                     tgt=self.slot_queries[:, :num_slots].repeat(patch_tokens.size(0), 1, 1),
                     memory=patch_tokens,
-                    tgt_mask=self.tgt_mask[:num_slots, :num_slots].to(self.device),
+                    tgt_mask=self.tgt_mask[:num_slots, :num_slots].to(device),
                     tgt_is_causal=True,
                 )
                 
@@ -90,6 +91,16 @@ class CausalValidationExperiments:
                 self.tgt_mask = torch.triu(torch.ones(self.num_slots, self.num_slots), diagonal=1).bool()
                 # Reverse it
                 self.tgt_mask = self.tgt_mask.flip(dims=[0, 1])
+            
+            def forward_slots(self, patch_tokens, num_slots):
+                device = patch_tokens.device
+                slots = self.generator(
+                    tgt=self.slot_queries[:, :num_slots].repeat(patch_tokens.size(0), 1, 1),
+                    memory=patch_tokens,
+                    tgt_mask=self.tgt_mask[:num_slots, :num_slots].to(device),
+                    tgt_is_causal=True,
+                )
+                return slots
         
         baselines['reverse_causal'] = ReverseCausalSlotFormer(128, 3, "vit_base_patch16_dinov3")
         
@@ -158,10 +169,11 @@ class CausalValidationExperiments:
                         slots = model.forward_slots(patch_tokens, num_slots)
                     else:
                         # Standard SlotFormer
+                        device = images.device
                         slots = model.generator(
                             tgt=model.slot_queries[:, :num_slots].repeat(B, 1, 1),
                             memory=patch_tokens,
-                            tgt_mask=model.tgt_mask[:num_slots, :num_slots].to(self.device) if model.tgt_mask is not None else None,
+                            tgt_mask=model.tgt_mask[:num_slots, :num_slots].to(device) if model.tgt_mask is not None else None,
                             tgt_is_causal=True,
                         )
                     
@@ -261,10 +273,11 @@ class CausalValidationExperiments:
                         if hasattr(model, 'forward_slots'):
                             slots = model.forward_slots(patch_tokens, num_slots)
                         else:
+                            device = image.device
                             slots = model.generator(
                                 tgt=model.slot_queries[:, :num_slots].repeat(1, 1, 1),
                                 memory=patch_tokens,
-                                tgt_mask=model.tgt_mask[:num_slots, :num_slots].to(self.device) if model.tgt_mask is not None else None,
+                                tgt_mask=model.tgt_mask[:num_slots, :num_slots].to(device) if model.tgt_mask is not None else None,
                                 tgt_is_causal=True,
                             )
                         
@@ -299,16 +312,17 @@ class CausalValidationExperiments:
                         slots2 = model.forward_slots(patch_tokens, 64)
                         consistency = F.cosine_similarity(slots1.flatten(), slots2.flatten(), dim=0).item()
                     else:
+                        device = image.device
                         slots1 = model.generator(
                             tgt=model.slot_queries[:, :64].repeat(1, 1, 1),
                             memory=patch_tokens,
-                            tgt_mask=model.tgt_mask[:64, :64].to(self.device) if model.tgt_mask is not None else None,
+                            tgt_mask=model.tgt_mask[:64, :64].to(device) if model.tgt_mask is not None else None,
                             tgt_is_causal=True,
                         )
                         slots2 = model.generator(
                             tgt=model.slot_queries[:, :64].repeat(1, 1, 1),
                             memory=patch_tokens,
-                            tgt_mask=model.tgt_mask[:64, :64].to(self.device) if model.tgt_mask is not None else None,
+                            tgt_mask=model.tgt_mask[:64, :64].to(device) if model.tgt_mask is not None else None,
                             tgt_is_causal=True,
                         )
                         consistency = F.cosine_similarity(slots1.flatten(), slots2.flatten(), dim=0).item()

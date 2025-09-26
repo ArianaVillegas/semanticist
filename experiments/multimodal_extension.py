@@ -90,7 +90,7 @@ class MultiModalSlotFormer(nn.Module):
             self.reconstructors[modality] = nn.TransformerDecoder(decoder_layer, num_layers=3)
         
         # Positional embeddings for different modalities
-        self.pos_embeds = nn.ModuleDict()
+        self.pos_embeds = nn.ParameterDict()
         self.pos_embeds['vision'] = nn.Parameter(torch.randn(1, 196, self.unified_dim))  # 14x14 patches
         self.pos_embeds['text'] = nn.Parameter(torch.randn(1, 512, self.unified_dim))    # Max 512 tokens
     
