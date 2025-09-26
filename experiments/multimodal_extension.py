@@ -11,7 +11,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 import json
+import sys
+import os
 from transformers import AutoTokenizer, AutoModel
+
+# Add parent directory to path to import train module
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from train import SlotFormer
 
 class MultiModalSlotFormer(nn.Module):

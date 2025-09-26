@@ -54,14 +54,17 @@ echo "=== Running Large-Scale Experiments ==="
 
 # 1. Scalability Study
 echo "1. Running Scalability Study..."
+cd /home/avillegas/semanticist
 python experiments/scalability_study.py
 
 # 2. Causal Validation
 echo "2. Running Causal Validation..."
+cd /home/avillegas/semanticist
 python experiments/causal_validation.py
 
 # 3. Multi-Modal Extension
 echo "3. Running Multi-Modal Extension..."
+cd /home/avillegas/semanticist
 python experiments/multimodal_extension.py
 
 echo "=== Large-Scale Experiments Complete ==="
