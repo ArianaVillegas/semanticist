@@ -88,13 +88,13 @@ class StorageAnalysisVisualizer:
         self.device = device
         self.model = self.load_model(model_path)
         
+        # Results directory (create first!)
+        self.results_dir = Path("./storage_analysis_viz")
+        self.results_dir.mkdir(exist_ok=True)
+        
         # Create high-quality decoder
         self.feature_decoder = HighQualityFeatureDecoder().to(device)
         self.train_feature_decoder()
-        
-        # Results directory
-        self.results_dir = Path("./storage_analysis_viz")
-        self.results_dir.mkdir(exist_ok=True)
         
     def load_model(self, model_path):
         """Load trained SlotFormer model."""
