@@ -33,7 +33,8 @@ def train_clevr():
     """Main function to run CLEVR training."""
     
     # 1. Setup Fabric for multi-GPU training
-    fabric = L.Fabric(accelerator="auto", devices="auto", strategy="ddp", precision=PRECISION)
+    # Use a single GPU, no DDP strategy needed.
+    fabric = L.Fabric(accelerator="auto", devices=1, precision=PRECISION)
     fabric.launch()
 
     fabric.print(f"=== Starting SlotFormer Training on CLEVR ===")

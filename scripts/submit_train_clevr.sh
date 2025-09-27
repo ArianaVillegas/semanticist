@@ -5,7 +5,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
-#SBATCH --gres=gpu:2 # Using 2 GPUs
+#SBATCH --gres=gpu:1 # Using 1 GPU
 #SBATCH --time=24:00:00 # 24-hour time limit
 #SBATCH --output=logs/train_clevr_%j.out
 #SBATCH --error=logs/train_clevr_%j.err
