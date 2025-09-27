@@ -36,26 +36,30 @@ class PixelDecoder(nn.Module):
         self.img_size = img_size
         self.num_patches_side = img_size // patch_size
 
-        # Project features to a higher-dimensional space for convolution
-        self.proj = nn.Linear(input_dim, 256 * 4 * 4)
-
-        # Convolutional upsampling layers
+        # Convolutional decoder that starts with the ViT feature dimension (input_dim = 768)
         self.decoder = nn.Sequential(
+            # Upsample from 14x14 to 28x28, reducing channels from 768 to 256
+            nn.ConvTranspose2d(input_dim, 256, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(),
+            # Upsample from 28x28 to 56x56, reducing channels from 256 to 128
             nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
             nn.ReLU(),
+            # Upsample from 56x56 to 112x112, reducing channels from 128 to 64
             nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
             nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(32, 3, kernel_size=4, stride=2, padding=1),
+            # Upsample from 112x112 to 224x224, reducing channels to 3 (RGB)
+            nn.ConvTranspose2d(64, 3, kernel_size=4, stride=2, padding=1),
         )
 
     def forward(self, x):
-        # x shape: (B, NumPatches, Dim)
+        # x shape: (B, NumPatches, Dim) -> e.g., (128, 196, 768)
         B, N, D = x.shape
-        x = self.proj(x)
-        # Reshape for convolution: (B, C, H, W)
-        x = x.reshape(B, 256, self.num_patches_side // 4, self.num_patches_side // 4)
+
+        # Reshape to a spatial feature map: (B, Dim, H, W)
+        x = x.permute(0, 2, 1).reshape(B, D, self.num_patches_side, self.num_patches_side)
+        # Now x is (B, 768, 14, 14)
+        
+        # Upsample with the convolutional decoder
         x = self.decoder(x)
         return x
 
