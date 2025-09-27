@@ -210,7 +210,6 @@ class MultiModalExperiments:
         model = MultiModalSlotFormer(num_slots=64, modalities=['text']).to(self.device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
         
-        # Training
         model.train()
         losses = []
         
@@ -218,7 +217,6 @@ class MultiModalExperiments:
             epoch_loss = 0
             count = 0
             
-            # Process in batches
             for i in range(0, len(texts), 4):
                 batch_texts = texts[i:i+4]
                 
