@@ -86,12 +86,12 @@ def train_clevr():
         model.train()
         total_loss = 0
         for i, (images, _) in enumerate(train_dataloader):
-            B, _, _, _ = images.shape
             num_slots_to_use = torch.randint(1, NUM_SLOTS + 1, (1,)).item()
 
-            reconstructed_patches, original_patches = model(images, num_slots_to_use)
-            loss = F.mse_loss(reconstructed_patches, original_patches)
+            # Forward pass returns the loss directly
+            loss = model(images, num_slots_to_use)
             
+            # Backward pass and optimization
             optimizer.zero_grad()
             fabric.backward(loss)
             optimizer.step()

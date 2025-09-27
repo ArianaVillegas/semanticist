@@ -21,111 +21,135 @@ ENCODER_NAME = MODELS["dinov3"]
 # Training
 BATCH_SIZE = 256
 LEARNING_RATE = 3e-4
-EPOCHS = 50
 PRECISION = "bf16-mixed"
 LOG_INTERVAL = 20
 COMPILE = False
 
 
+class PixelDecoder(nn.Module):
+    """Decodes patch features back into an image."""
+
+    def __init__(self, input_dim=768, patch_size=16, img_size=224):
+        super().__init__()
+        self.input_dim = input_dim
+        self.patch_size = patch_size
+        self.img_size = img_size
+        self.num_patches_side = img_size // patch_size
+
+        # Project features to a higher-dimensional space for convolution
+        self.proj = nn.Linear(input_dim, 256 * 4 * 4)
+
+        # Convolutional upsampling layers
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(32, 3, kernel_size=4, stride=2, padding=1),
+        )
+
+    def forward(self, x):
+        # x shape: (B, NumPatches, Dim)
+        B, N, D = x.shape
+        x = self.proj(x)
+        # Reshape for convolution: (B, C, H, W)
+        x = x.reshape(B, 256, self.num_patches_side // 4, self.num_patches_side // 4)
+        x = self.decoder(x)
+        return x
+
+
 class SlotFormer(nn.Module):
-    """
-    Generates ordered, causal slots that explain vision transformer patch tokens.
-    """
+    """SlotFormer model."""
 
     def __init__(self, num_slots: int, num_layers: int, encoder_name: str):
         super().__init__()
         self.num_slots = num_slots
-        
-        # pretrained frozen ViT 
-        self.encoder = timm.create_model(encoder_name, pretrained=True).eval()
+        self.encoder = timm.create_model(encoder_name, pretrained=True)
+        self.embed_dim = self.encoder.embed_dim
+
+        # Freeze the vision transformer encoder
         for param in self.encoder.parameters():
             param.requires_grad = False
 
-        self.embed_dim = self.encoder.embed_dim
-        self.num_patches = self.encoder.patch_embed.num_patches
+        # Slot queries and null slots (learnable)
+        self.slot_queries = nn.Parameter(torch.randn(1, num_slots, self.embed_dim))
+        self.null_slots = nn.Parameter(torch.randn(1, num_slots, self.embed_dim))
 
-        # learnable queries that initiate the slot generation process.
-        self.slot_queries = nn.Parameter(torch.randn(1, self.num_slots, self.embed_dim))
-
-        # positional embeddings for the decoder to reconstruct the patch grid.
-        # initialized from the encoder's embeddings but made learnable.
-        if self.encoder.pos_embed is not None:
-            m = self.encoder.num_prefix_tokens
-            pos_embed_init = self.encoder.pos_embed[:, m:].clone()
-        else:
-            # dinov3 uses ROPE, not 2d posembeds
-            pos_embed_init = torch.empty(1, self.num_patches, self.embed_dim)
-            nn.init.normal_(pos_embed_init, std=0.02)
-
-        self.decoder_pos_embed = nn.Parameter(pos_embed_init)
-        # autoregressive generator and reconstructor
+        # Transformer decoder layer for both generator and reconstructor
         decoder_layer = nn.TransformerDecoderLayer(
             d_model=self.embed_dim,
-            nhead=8,
-            dim_feedforward=self.embed_dim * 4,
+            nhead=12,  # Standard for ViT-Base
+            dim_feedforward=3072,  # Standard for ViT-Base
+            dropout=0.1,
             batch_first=True,
-            activation="gelu",
         )
+
+        # Generator (causal cross-attention from slots to image patches)
         self.generator = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
+
+        # Reconstructor (cross-attention from slots to patch queries)
         self.reconstructor = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
+        
+        # Pixel Decoder to go from features to image
+        self.pixel_decoder = PixelDecoder(input_dim=self.embed_dim)
+
+        # Positional embedding for the decoder (learnable)
+        self.num_patches = self.encoder.patch_embed.num_patches
+        self.decoder_pos_embed = nn.Parameter(
+            torch.randn(1, self.num_patches, self.embed_dim)
+        )
 
         # Cache a causal target mask once for the generator (compile-friendly)
         self.register_buffer(
             "tgt_mask",
-            nn.Transformer.generate_square_subsequent_mask(self.num_slots),
-            persistent=False,
+            nn.Transformer.generate_square_subsequent_mask(num_slots, device=None),
         )
 
-        # Learnable NULL tokens for masked slots (per-slot)
-        self.null_slots = nn.Parameter(torch.zeros(1, self.num_slots, self.embed_dim))
-        nn.init.normal_(self.slot_queries, std=0.02)
-        nn.init.normal_(self.null_slots, std=0.02)
+    def forward(self, images: Tensor, num_slots_to_use: int = None, return_slots: bool = False):
+        B, C, H, W = images.shape
+        if num_slots_to_use is None:
+            num_slots_to_use = self.num_slots
 
-    def forward(self, x: Tensor):
-        B, K = x.shape[0], self.num_slots
-        # 1. get patch tokens Z
-        with torch.no_grad():
-            patch_tokens = self.encoder.forward_features(x)
-            patch_tokens = patch_tokens[:, self.encoder.num_prefix_tokens :]  # drop cls
+        # 1. Encode image to patch tokens
+        patch_tokens = self.encoder.forward_features(images)
+        # Remove CLS token if it exists
+        if hasattr(self.encoder, 'num_prefix_tokens') and self.encoder.num_prefix_tokens > 0:
+            patch_tokens = patch_tokens[:, self.encoder.num_prefix_tokens:]
 
-        # 2. generate slots S
-        #   A single forward pass with a causal mask
-        #   This ensures that generating s_i only depends on s_{1...i-1}.
+        # 2. Generate slots using causal cross-attention
         slots = self.generator(
-            tgt=self.slot_queries.repeat(B, 1, 1),
+            tgt=self.slot_queries[:, :num_slots_to_use].repeat(B, 1, 1),
             memory=patch_tokens,
-            tgt_mask=self.tgt_mask.to(patch_tokens.device),
-            tgt_is_causal=True,
-        )  # [B, K, D]
+            tgt_mask=self.tgt_mask[:num_slots_to_use, :num_slots_to_use],
+        )
 
-        # 3. reconstruction
-        # sample one prefix length m per sample and reconstruct once.
-        arange = torch.arange(K, device=slots.device)
-        m = torch.randint(1, K + 1, (B,), device=slots.device)
-        keep = arange.unsqueeze(0) < m.unsqueeze(1)  # [B, K] bool
+        # 3. Pad unused slots with null embeddings for reconstruction
+        if num_slots_to_use < self.num_slots:
+            null_padding = self.null_slots[:, num_slots_to_use:].repeat(B, 1, 1)
+            padded_slots = torch.cat([slots, null_padding], dim=1)
+        else:
+            padded_slots = slots
 
-        # replace masked suffix with learnable NULL tokens
-        keep_3d = keep.unsqueeze(-1)  # [B, K, 1] bool
-        null = self.null_slots.expand(B, -1, -1).type_as(slots)  # [B, K, D]
-        masked_slots = torch.where(keep_3d, slots, null)  # [B, K, D]
-
+        # 4. Reconstruct patch features from slots
         reconstructed_patches = self.reconstructor(
             tgt=self.decoder_pos_embed.repeat(B, 1, 1),
-            memory=masked_slots,
+            memory=padded_slots,
         )
 
-        # 4. mse loss
-        loss = F.mse_loss(reconstructed_patches, patch_tokens)
-        return loss
+        # 5. Decode patch features back to a pixel image
+        reconstructed_image = self.pixel_decoder(reconstructed_patches)
+        
+        # During training, return the reconstructed image and the original for loss calculation
+        if self.training:
+            return F.mse_loss(reconstructed_image, images)
 
-
-def train():
-    fabric = L.Fabric(accelerator="auto", precision=PRECISION)
-    fabric.launch()
-
-    model = SlotFormer(NUM_SLOTS, TRANSFORMER_LAYERS, ENCODER_NAME)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
-    model = torch.compile(model, fullgraph=True, disable=not COMPILE)
+        # During inference/evaluation
+        if return_slots:
+            return reconstructed_image, images, slots
+        
+        return reconstructed_image, images
     model, optimizer = fabric.setup(model, optimizer)
 
     transform = torchvision.transforms.Compose(
