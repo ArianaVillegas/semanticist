@@ -27,6 +27,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from train import SlotFormer
 
 
+class TensorEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle PyTorch Tensors."""
+
+    def default(self, obj):
+        if isinstance(obj, torch.Tensor):
+            return obj.cpu().tolist()
+        return super(TensorEncoder, self).default(obj)
+
+
 def create_synthetic_dataset(num_images=20, img_size=224):
     """Create a dataset of diverse, synthetic images for analysis."""
     print("🎨 Creating diverse synthetic dataset...")
@@ -367,4 +376,4 @@ class FeatureSpaceAnalyzer:
         }
 
         with open(self.results_dir / 'analysis_summary.json', 'w') as f:
-            json.dump(summary_data, f, indent=2)
+            json.dump(summary_data, f, indent=2, cls=TensorEncoder)
