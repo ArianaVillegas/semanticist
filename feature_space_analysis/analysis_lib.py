@@ -96,9 +96,31 @@ class FeatureSpaceAnalyzer:
         
         if Path(model_path).exists():
             checkpoint = torch.load(model_path, map_location=self.device)
-            state_dict = checkpoint.get('model', checkpoint)
-            model.load_state_dict(state_dict)
-            print(f"✓ Loaded model from {model_path}")
+            # Unwrap common checkpoint formats
+            state_dict = (
+                checkpoint.get('model')
+                if isinstance(checkpoint, dict) and 'model' in checkpoint
+                else checkpoint.get('state_dict')
+                if isinstance(checkpoint, dict) and 'state_dict' in checkpoint
+                else checkpoint
+            )
+
+            # Strip DistributedDataParallel/Lightning prefixes if present
+            if isinstance(state_dict, dict) and any(k.startswith('module.') for k in state_dict.keys()):
+                state_dict = {k[len('module.'):]: v for k, v in state_dict.items()}
+
+            # Load non-strictly to allow for buffers/new layers (e.g., tgt_mask, pixel_decoder)
+            load_res = model.load_state_dict(state_dict, strict=False)
+            missing = sorted(list(load_res.missing_keys)) if hasattr(load_res, 'missing_keys') else []
+            unexpected = sorted(list(load_res.unexpected_keys)) if hasattr(load_res, 'unexpected_keys') else []
+            if missing or unexpected:
+                print(f"⚠️ Partial checkpoint load from {model_path}")
+                if missing:
+                    print(f"   Missing keys ({len(missing)}): {missing}")
+                if unexpected:
+                    print(f"   Unexpected keys ({len(unexpected)}): {unexpected}")
+            else:
+                print(f"✓ Loaded model from {model_path}")
         else:
             print(f"⚠️ Model not found at '{model_path}'. Using random weights.")
             
