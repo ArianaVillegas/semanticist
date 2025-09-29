@@ -136,7 +136,7 @@ class FeatureSpaceAnalyzer:
         return model.to(self.device).eval()
 
     def _get_dataset(self, use_synthetic=True):
-        """Load Imagenette and optionally combine with synthetic data."""
+        """Load Caltech256 and optionally combine with synthetic data."""
         transform = torchvision.transforms.Compose([
             torchvision.transforms.Resize((224, 224)),
             torchvision.transforms.ToTensor(),
@@ -144,10 +144,13 @@ class FeatureSpaceAnalyzer:
         ])
         
         try:
-            real_dataset = torchvision.datasets.Imagenette("./datasets", split="val", transform=transform, download=False)
-            print(f"✓ Loaded Imagenette dataset with {len(real_dataset)} images.")
+            # Switched to Caltech256 for more diverse image categories
+            real_dataset = torchvision.datasets.Caltech256(
+                root="./datasets", transform=transform, download=True
+            )
+            print(f"✓ Loaded Caltech256 dataset with {len(real_dataset)} images.")
         except Exception as e:
-            print(f"⚠️ Could not load Imagenette: {e}. Using synthetic data only.")
+            print(f"⚠️ Could not load Caltech256: {e}. Using synthetic data only.")
             real_dataset = []
 
         if use_synthetic:
