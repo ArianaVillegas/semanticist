@@ -98,17 +98,25 @@ class ImagenetteWithCaptions(Dataset):
     
     def _load_imagenet_captions(self, captions_file):
         """Load ImageNet-Captions JSON file"""
+        print(f"📥 Loading captions from: {captions_file}")
         with open(captions_file, 'r') as f:
             data = json.load(f)
         
-        # Organize by synset (class ID)
-        captions_by_synset = {}
-        for item in data:
-            synset = item.get('synset', None)
-            if synset in self.IMAGENETTE_CLASSES:
-                if synset not in captions_by_synset:
-                    captions_by_synset[synset] = []
-                captions_by_synset[synset].append(item['caption'])
+        # Data format: {synset: [list of captions]}
+        if isinstance(data, dict):
+            # Already organized by synset
+            captions_by_synset = data
+            total_captions = sum(len(caps) for caps in captions_by_synset.values())
+            print(f"✅ Loaded {total_captions} captions for {len(captions_by_synset)} classes")
+        else:
+            # List format, organize by synset
+            captions_by_synset = {}
+            for item in data:
+                synset = item.get('synset') or item.get('wnid')
+                if synset in self.IMAGENETTE_CLASSES:
+                    if synset not in captions_by_synset:
+                        captions_by_synset[synset] = []
+                    captions_by_synset[synset].append(item.get('caption', ''))
         
         return captions_by_synset
     
