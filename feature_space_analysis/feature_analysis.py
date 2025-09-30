@@ -32,11 +32,6 @@ def main():
         default='cuda',
         help='Device to run the analysis on (e.g., "cuda" or "cpu").'
     )
-    parser.add_argument(
-        '--no_synthetic',
-        action='store_true',
-        help='If set, do not include synthetic images in the analysis.'
-    )
 
     args = parser.parse_args()
 
@@ -49,8 +44,7 @@ def main():
     )
     
     analyzer.run_full_analysis(
-        num_images=args.num_images,
-        use_synthetic=not args.no_synthetic
+        num_images=args.num_images
     )
 
 if __name__ == "__main__":
