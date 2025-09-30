@@ -15,7 +15,17 @@ import json
 from tqdm import tqdm
 
 from models.slot_coca import SlotCoCa
-from imagenet_captions_dataset import ImageNetCaptionsDataset, collate_fn
+try:
+    from imagenette_captions_dataset import ImagenetteWithCaptions, collate_fn
+    IMAGENETTE_AVAILABLE = True
+except:
+    IMAGENETTE_AVAILABLE = False
+
+try:
+    from imagenet_captions_dataset import ImageNetCaptionsDataset, collate_fn as collate_fn_imagenet
+    IMAGENET_CAPTIONS_AVAILABLE = True
+except:
+    IMAGENET_CAPTIONS_AVAILABLE = False
 
 
 def setup_ddp(rank, world_size):
@@ -78,12 +88,27 @@ class MultimodalTrainer:
     
     def prepare_data(self):
         """Prepare dataloaders with DDP"""
-        # Training dataset
-        train_dataset = ImageNetCaptionsDataset(
-            root_dir=self.args.data_dir,
-            split='train',
-            subset_size=self.args.subset_size
-        )
+        # Detect dataset type
+        use_imagenette = (Path(self.args.data_dir) / 'train').exists() and IMAGENETTE_AVAILABLE
+        
+        if use_imagenette:
+            # Use Imagenette dataset
+            print(f"📁 Using Imagenette dataset from {self.args.data_dir}")
+            train_dataset = ImagenetteWithCaptions(
+                imagenette_root=self.args.data_dir,
+                split='train',
+                captions_per_image=5
+            )
+        elif IMAGENET_CAPTIONS_AVAILABLE:
+            # Use ImageNet-Captions dataset
+            print(f"📁 Using ImageNet-Captions from {self.args.data_dir}")
+            train_dataset = ImageNetCaptionsDataset(
+                root_dir=self.args.data_dir,
+                split='train',
+                subset_size=self.args.subset_size
+            )
+        else:
+            raise RuntimeError("No dataset available! Install imagenette_captions_dataset.py")
         
         train_sampler = DistributedSampler(
             train_dataset,
@@ -103,11 +128,18 @@ class MultimodalTrainer:
         
         # Validation dataset
         if self.rank == 0:
-            val_dataset = ImageNetCaptionsDataset(
-                root_dir=self.args.data_dir,
-                split='val',
-                subset_size=self.args.val_subset_size
-            )
+            if use_imagenette:
+                val_dataset = ImagenetteWithCaptions(
+                    imagenette_root=self.args.data_dir,
+                    split='val',
+                    captions_per_image=5
+                )
+            else:
+                val_dataset = ImageNetCaptionsDataset(
+                    root_dir=self.args.data_dir,
+                    split='val',
+                    subset_size=self.args.val_subset_size
+                )
             
             self.val_loader = DataLoader(
                 val_dataset,
