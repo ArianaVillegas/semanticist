@@ -11,7 +11,7 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.slot_coca import SlotCoCa
-from imagenet_captions_dataset import ImageNetCaptionsDataset, collate_fn
+from imagenette_captions_dataset import ImagenetteWithCaptions, collate_fn
 
 # Try to import captioning metrics
 try:
@@ -120,18 +120,30 @@ class CaptioningEvaluator:
             'num_samples': len(predictions)
         }
     
-    def evaluate(self, data_dir, split='val', batch_size=32, num_samples=1000):
+    def evaluate(self, data_dir, split='val', batch_size=32, num_samples=1000, use_imagenette=False):
         """Run full captioning evaluation"""
         print("\n" + "="*60)
         print("IMAGE CAPTIONING EVALUATION")
         print("="*60)
         
         # Load dataset
-        dataset = ImageNetCaptionsDataset(
-            root_dir=data_dir,
-            split=split,
-            subset_size=num_samples
-        )
+        if use_imagenette:
+            print("Using Imagenette dataset...")
+            dataset = ImagenetteWithCaptions(
+                imagenette_root=data_dir,
+                split=split,
+                captions_per_image=1  # Use 1 caption per image for evaluation
+            )
+            if num_samples and num_samples < len(dataset):
+                import torch
+                dataset = torch.utils.data.Subset(dataset, range(num_samples))
+        else:
+            from imagenet_captions_dataset import ImageNetCaptionsDataset
+            dataset = ImageNetCaptionsDataset(
+                root_dir=data_dir,
+                split=split,
+                subset_size=num_samples
+            )
         
         loader = DataLoader(
             dataset,
@@ -170,6 +182,7 @@ def main():
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_samples', type=int, default=1000)
     parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--use_imagenette', action='store_true', help='Use Imagenette dataset')
     
     args = parser.parse_args()
     
@@ -178,7 +191,8 @@ def main():
         args.data_dir,
         split=args.split,
         batch_size=args.batch_size,
-        num_samples=args.num_samples
+        num_samples=args.num_samples,
+        use_imagenette=args.use_imagenette
     )
     
     print("\n✅ Evaluation complete!")

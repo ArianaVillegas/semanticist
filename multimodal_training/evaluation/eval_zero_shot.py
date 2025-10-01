@@ -14,6 +14,7 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.slot_coca import SlotCoCa
+from imagenette_captions_dataset import ImagenetteWithCaptions
 
 # Try to import CLIP for comparison
 try:
@@ -56,33 +57,47 @@ class ZeroShotEvaluator:
         return model
     
     @torch.no_grad()
-    def evaluate_imagenet(self, data_dir, batch_size=256, num_samples=None):
+    def evaluate_imagenet(self, data_dir, batch_size=256, num_samples=None, use_imagenette=False):
         """
-        Evaluate zero-shot classification on ImageNet
+        Evaluate zero-shot classification on ImageNet or Imagenette
         
         Args:
-            data_dir: Path to ImageNet validation set
+            data_dir: Path to ImageNet/Imagenette validation set
             batch_size: Batch size for evaluation
             num_samples: Limit number of samples (for quick testing)
+            use_imagenette: If True, use Imagenette classes
         """
+        dataset_name = "Imagenette" if use_imagenette else "ImageNet"
         print("\n" + "="*60)
-        print("ZERO-SHOT IMAGENET CLASSIFICATION")
+        print(f"ZERO-SHOT {dataset_name.upper()} CLASSIFICATION")
         print("="*60)
         
-        # Load ImageNet validation set
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(256),
-            torchvision.transforms.CenterCrop(224),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
+        # Load dataset
+        if use_imagenette:
+            # Use Imagenette dataset
+            imagenette_dataset = ImagenetteWithCaptions(
+                imagenette_root=data_dir,
+                split='val',
+                captions_per_image=1  # Only need images, not captions
             )
-        ])
-        
-        dataset = torchvision.datasets.ImageFolder(root=data_dir, transform=transform)
-        if num_samples:
-            dataset = torch.utils.data.Subset(dataset, range(min(num_samples, len(dataset))))
+            # Just use the underlying ImageFolder
+            dataset = imagenette_dataset.image_dataset
+            if num_samples:
+                dataset = torch.utils.data.Subset(dataset, range(min(num_samples, len(dataset))))
+        else:
+            # Load full ImageNet validation set
+            transform = torchvision.transforms.Compose([
+                torchvision.transforms.Resize(256),
+                torchvision.transforms.CenterCrop(224),
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225]
+                )
+            ])
+            dataset = torchvision.datasets.ImageFolder(root=data_dir, transform=transform)
+            if num_samples:
+                dataset = torch.utils.data.Subset(dataset, range(min(num_samples, len(dataset))))
         
         loader = DataLoader(
             dataset,
@@ -93,7 +108,23 @@ class ZeroShotEvaluator:
         )
         
         # Create text prompts for all classes
-        class_names = [name.replace('_', ' ') for name in dataset.classes]
+        if use_imagenette:
+            # Imagenette class names
+            class_mapping = {
+                'n01440764': 'tench',
+                'n02102040': 'English springer spaniel',
+                'n02979186': 'cassette player',
+                'n03000684': 'chain saw',
+                'n03028079': 'church',
+                'n03394916': 'French horn',
+                'n03417042': 'garbage truck',
+                'n03425413': 'gas pump',
+                'n03445777': 'golf ball',
+                'n03888257': 'parachute'
+            }
+            class_names = [class_mapping.get(c, c.replace('_', ' ')) for c in dataset.classes]
+        else:
+            class_names = [name.replace('_', ' ') for name in dataset.classes]
         text_prompts = [f"a photo of a {name}" for name in class_names]
         
         # Encode text prompts (Slot-CoCa)
@@ -186,10 +217,11 @@ class ZeroShotEvaluator:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', type=str, required=True, help='Path to trained Slot-CoCa checkpoint')
-    parser.add_argument('--data_dir', type=str, required=True, help='Path to ImageNet val directory')
+    parser.add_argument('--data_dir', type=str, required=True, help='Path to ImageNet/Imagenette val directory')
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--num_samples', type=int, default=None, help='Limit samples for quick test')
     parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--use_imagenette', action='store_true', help='Use Imagenette dataset (10 classes)')
     
     args = parser.parse_args()
     
@@ -197,7 +229,8 @@ def main():
     results = evaluator.evaluate_imagenet(
         args.data_dir,
         batch_size=args.batch_size,
-        num_samples=args.num_samples
+        num_samples=args.num_samples,
+        use_imagenette=args.use_imagenette
     )
     
     print("\n✅ Evaluation complete!")
