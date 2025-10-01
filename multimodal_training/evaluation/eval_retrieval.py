@@ -133,10 +133,16 @@ class RetrievalEvaluator:
         # Load dataset
         if use_imagenette:
             print("Using Imagenette dataset...")
+            # Use real captions if available
+            captions_file = os.path.join(os.path.dirname(data_dir), 'multimodal_training', 'data', 'imagenette_captions', 'imagenette_captions.json')
+            if not os.path.exists(captions_file):
+                captions_file = None
+            
             dataset = ImagenetteWithCaptions(
                 imagenette_root=data_dir,
                 split=split,
-                captions_per_image=1  # Use 1 caption per image for retrieval
+                captions_per_image=1,
+                captions_file=captions_file
             )
             if num_samples and num_samples < len(dataset):
                 import torch

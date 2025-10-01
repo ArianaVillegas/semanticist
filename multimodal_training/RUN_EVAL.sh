@@ -5,6 +5,7 @@
 # Configuration
 MODEL_PATH="/home/avillegas/semanticist/multimodal_training/checkpoints/slot_coca_real_captions/best_model.pt"
 DATA_DIR="/home/avillegas/semanticist/datasets/imagenette2"
+CAPTIONS_FILE="/home/avillegas/semanticist/multimodal_training/data/imagenette_captions/imagenette_captions.json"
 DEVICE="cpu"  # Change to "cuda" if using GPU
 
 echo "============================================================"

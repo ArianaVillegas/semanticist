@@ -66,16 +66,8 @@ class CaptioningEvaluator:
         return all_predictions, all_references, all_image_ids
     
     def compute_metrics(self, predictions, references, image_ids):
-        """Compute captioning metrics"""
-        if not COCO_METRICS_AVAILABLE:
-            print("⚠️  COCO metrics not available. Showing sample captions only.")
-            return self.compute_simple_metrics(predictions, references)
-        
-        # Format for COCO evaluation
-        # This requires specific format - implement if needed
-        results = self.compute_simple_metrics(predictions, references)
-        
-        return results
+        """Compute captioning metrics using simple BLEU"""
+        return self.compute_simple_metrics(predictions, references)
     
     def compute_simple_metrics(self, predictions, references):
         """Compute simple metrics without COCO tools"""
@@ -124,10 +116,16 @@ class CaptioningEvaluator:
         # Load dataset
         if use_imagenette:
             print("Using Imagenette dataset...")
+            # Use real captions if available
+            captions_file = os.path.join(os.path.dirname(data_dir), 'multimodal_training', 'data', 'imagenette_captions', 'imagenette_captions.json')
+            if not os.path.exists(captions_file):
+                captions_file = None
+            
             dataset = ImagenetteWithCaptions(
                 imagenette_root=data_dir,
                 split=split,
-                captions_per_image=1  # Use 1 caption per image for evaluation
+                captions_per_image=1,
+                captions_file=captions_file
             )
             if num_samples and num_samples < len(dataset):
                 import torch

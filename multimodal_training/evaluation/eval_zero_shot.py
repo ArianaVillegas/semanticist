@@ -75,10 +75,16 @@ class ZeroShotEvaluator:
         # Load dataset
         if use_imagenette:
             # Use Imagenette dataset
+            # Use real captions if available
+            captions_file = os.path.join(os.path.dirname(data_dir), 'multimodal_training', 'data', 'imagenette_captions', 'imagenette_captions.json')
+            if not os.path.exists(captions_file):
+                captions_file = None
+            
             imagenette_dataset = ImagenetteWithCaptions(
                 imagenette_root=data_dir,
                 split='val',
-                captions_per_image=1  # Only need images, not captions
+                captions_per_image=1,
+                captions_file=captions_file
             )
             # Just use the underlying ImageFolder
             dataset = imagenette_dataset.image_dataset
