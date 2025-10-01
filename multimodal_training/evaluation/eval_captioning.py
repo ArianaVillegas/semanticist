@@ -13,14 +13,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.slot_coca import SlotCoCa
 from imagenette_captions_dataset import ImagenetteWithCaptions, collate_fn
 
-# Try to import captioning metrics
-try:
-    from pycocotools.coco import COCO
-    from pycocotools.cocoeval import COCOEvalCap
-    COCO_METRICS_AVAILABLE = True
-except:
-    COCO_METRICS_AVAILABLE = False
-    print("⚠️  Install pycocotools for full metrics: pip install pycocotools")
+# Simple metrics without external dependencies
+import numpy as np
+from collections import Counter
 
 
 class CaptioningEvaluator:
