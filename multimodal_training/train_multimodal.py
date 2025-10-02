@@ -27,6 +27,12 @@ try:
 except:
     IMAGENET_CAPTIONS_AVAILABLE = False
 
+try:
+    from coco_dataset import COCOCaptionsDataset, collate_fn as collate_fn_coco
+    COCO_AVAILABLE = True
+except:
+    COCO_AVAILABLE = False
+
 
 def setup_ddp(rank, world_size):
     """Initialize DDP"""
@@ -89,9 +95,20 @@ class MultimodalTrainer:
     def prepare_data(self):
         """Prepare dataloaders with DDP"""
         # Detect dataset type
-        use_imagenette = (Path(self.args.data_dir) / 'train').exists() and IMAGENETTE_AVAILABLE
+        use_coco = self.args.use_coco if hasattr(self.args, 'use_coco') else False
+        use_imagenette = (Path(self.args.data_dir) / 'train').exists() and IMAGENETTE_AVAILABLE and not use_coco
         
-        if use_imagenette:
+        if use_coco:
+            if not COCO_AVAILABLE:
+                raise RuntimeError("COCO dataset not available! Install: pip install pycocotools")
+            print(f"📁 Using COCO dataset from {self.args.data_dir}")
+            train_dataset = COCOCaptionsDataset(
+                root_dir=Path(self.args.data_dir) / 'train2017',
+                ann_file=Path(self.args.data_dir) / 'annotations' / 'captions_train2017.json',
+                captions_per_image=5
+            )
+            current_collate_fn = collate_fn_coco
+        elif use_imagenette:
             # Use Imagenette dataset
             print(f"📁 Using Imagenette dataset from {self.args.data_dir}")
             train_dataset = ImagenetteWithCaptions(
@@ -99,6 +116,7 @@ class MultimodalTrainer:
                 split='train',
                 captions_per_image=5
             )
+            current_collate_fn = collate_fn
         elif IMAGENET_CAPTIONS_AVAILABLE:
             # Use ImageNet-Captions dataset
             print(f"📁 Using ImageNet-Captions from {self.args.data_dir}")
@@ -107,8 +125,14 @@ class MultimodalTrainer:
                 split='train',
                 subset_size=self.args.subset_size
             )
+            current_collate_fn = collate_fn_imagenet
         else:
-            raise RuntimeError("No dataset available! Install imagenette_captions_dataset.py")
+            raise RuntimeError("No dataset available! Use --use_coco or install imagenette_captions_dataset.py")
+        
+        # Apply num_samples limit if specified
+        if hasattr(self.args, 'num_samples') and self.args.num_samples:
+            print(f"⚠️  Limiting to {self.args.num_samples} samples (from {len(train_dataset)})")
+            train_dataset = torch.utils.data.Subset(train_dataset, range(min(self.args.num_samples, len(train_dataset))))
         
         train_sampler = DistributedSampler(
             train_dataset,
@@ -121,14 +145,20 @@ class MultimodalTrainer:
             train_dataset,
             batch_size=self.args.batch_size,
             sampler=train_sampler,
-            collate_fn=collate_fn,
+            collate_fn=current_collate_fn,
             num_workers=self.args.num_workers,
             pin_memory=True
         )
         
         # Validation dataset
         if self.rank == 0:
-            if use_imagenette:
+            if use_coco:
+                val_dataset = COCOCaptionsDataset(
+                    root_dir=Path(self.args.data_dir) / 'val2017',
+                    ann_file=Path(self.args.data_dir) / 'annotations' / 'captions_val2017.json',
+                    captions_per_image=5
+                )
+            elif use_imagenette:
                 val_dataset = ImagenetteWithCaptions(
                     imagenette_root=self.args.data_dir,
                     split='val',
@@ -141,11 +171,16 @@ class MultimodalTrainer:
                     subset_size=self.args.val_subset_size
                 )
             
+            # Limit val samples if specified
+            if hasattr(self.args, 'num_samples') and self.args.num_samples:
+                val_limit = min(1000, len(val_dataset))  # Max 1000 for validation
+                val_dataset = torch.utils.data.Subset(val_dataset, range(val_limit))
+            
             self.val_loader = DataLoader(
                 val_dataset,
                 batch_size=self.args.batch_size,
                 shuffle=False,
-                collate_fn=collate_fn,
+                collate_fn=current_collate_fn,
                 num_workers=self.args.num_workers
             )
     
@@ -364,6 +399,8 @@ def main():
     
     # Data args
     parser.add_argument('--data_dir', type=str, default='./data/imagenet_captions')
+    parser.add_argument('--use_coco', action='store_true', help='Use COCO Captions dataset')
+    parser.add_argument('--num_samples', type=int, default=None, help='Limit number of training samples')
     parser.add_argument('--subset_size', type=int, default=100000, help='Use subset for proof-of-concept')
     parser.add_argument('--val_subset_size', type=int, default=5000)
     parser.add_argument('--batch_size', type=int, default=128)
