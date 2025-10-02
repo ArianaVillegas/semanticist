@@ -68,14 +68,29 @@ with torch.no_grad():
         logits = model.caption_head(decoded[:, -1, :])
         print(f"✅ Logits: {logits.shape}")
         
-        # Get top-5 predictions
+        # Get top-5 predictions BEFORE masking
         probs = torch.softmax(logits, dim=-1)
         top_probs, top_indices = torch.topk(probs[0], k=5)
         
-        print(f"\nTop 5 predictions:")
+        print(f"\nTop 5 predictions (BEFORE masking):")
         for i, (prob, idx) in enumerate(zip(top_probs, top_indices)):
             token = model.tokenizer.decode([idx.item()])
             print(f"  {i+1}. '{token}' (ID: {idx.item()}, prob: {prob.item():.4f})")
+        
+        # Apply [SEP] masking for first 3 tokens
+        min_length = 3
+        if step < min_length:
+            print(f"\n⚠️  Step {step} < {min_length}: Masking [SEP] token!")
+            logits[:, model.tokenizer.sep_token_id] = -float('inf')
+            
+            # Recompute top-5 AFTER masking
+            probs = torch.softmax(logits, dim=-1)
+            top_probs, top_indices = torch.topk(probs[0], k=5)
+            
+            print(f"\nTop 5 predictions (AFTER masking):")
+            for i, (prob, idx) in enumerate(zip(top_probs, top_indices)):
+                token = model.tokenizer.decode([idx.item()])
+                print(f"  {i+1}. '{token}' (ID: {idx.item()}, prob: {prob.item():.4f})")
         
         # Predict next token
         next_token = logits.argmax(dim=-1, keepdim=True)
