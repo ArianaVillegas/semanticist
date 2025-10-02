@@ -82,15 +82,22 @@ with torch.no_grad():
         if step < min_length:
             print(f"\n⚠️  Step {step} < {min_length}: Masking [SEP] token!")
             logits[:, model.tokenizer.sep_token_id] = -float('inf')
-            
-            # Recompute top-5 AFTER masking
-            probs = torch.softmax(logits, dim=-1)
-            top_probs, top_indices = torch.topk(probs[0], k=5)
-            
-            print(f"\nTop 5 predictions (AFTER masking):")
-            for i, (prob, idx) in enumerate(zip(top_probs, top_indices)):
-                token = model.tokenizer.decode([idx.item()])
-                print(f"  {i+1}. '{token}' (ID: {idx.item()}, prob: {prob.item():.4f})")
+        
+        # Repetition penalty: reduce probability of recently generated tokens
+        repetition_penalty = 1.5
+        if input_ids.size(1) > 1:
+            print(f"\n🔄 Applying repetition penalty ({repetition_penalty}x) to previous tokens")
+            for prev_token in input_ids[0, 1:]:  # Skip [CLS]
+                logits[:, prev_token] /= repetition_penalty
+        
+        # Recompute top-5 AFTER masking and penalty
+        probs = torch.softmax(logits, dim=-1)
+        top_probs, top_indices = torch.topk(probs[0], k=5)
+        
+        print(f"\nTop 5 predictions (AFTER masking + penalty):")
+        for i, (prob, idx) in enumerate(zip(top_probs, top_indices)):
+            token = model.tokenizer.decode([idx.item()])
+            print(f"  {i+1}. '{token}' (ID: {idx.item()}, prob: {prob.item():.4f})")
         
         # Predict next token
         next_token = logits.argmax(dim=-1, keepdim=True)
