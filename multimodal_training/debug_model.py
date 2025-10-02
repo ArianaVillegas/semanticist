@@ -47,8 +47,7 @@ with torch.no_grad():
     try:
         generated_ids = model.generate_caption(
             dummy_image,
-            max_length=20,
-            temperature=1.0
+            max_length=20
         )
         
         # Decode
