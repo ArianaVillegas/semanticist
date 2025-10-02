@@ -221,6 +221,12 @@ class SlotCoCa(nn.Module):
             if step < min_length:
                 logits[:, self.tokenizer.sep_token_id] = -float('inf')  # Mask [SEP]
             
+            # Repetition penalty: reduce probability of recently generated tokens
+            repetition_penalty = 1.5  # Higher = more penalty
+            if input_ids.size(1) > 1:
+                for prev_token in input_ids[0, 1:]:  # Skip [CLS]
+                    logits[:, prev_token] /= repetition_penalty
+            
             # Greedy: take argmax
             next_token = logits.argmax(dim=-1, keepdim=True)  # [B, 1]
             
