@@ -216,6 +216,11 @@ class SlotCoCa(nn.Module):
             # Get logits for LAST position only (next token prediction)
             logits = self.caption_head(decoded[:, -1, :])  # [B, vocab_size]
             
+            # Prevent early [SEP] - force model to generate at least 3 words
+            min_length = 3
+            if step < min_length:
+                logits[:, self.tokenizer.sep_token_id] = -float('inf')  # Mask [SEP]
+            
             # Greedy: take argmax
             next_token = logits.argmax(dim=-1, keepdim=True)  # [B, 1]
             
