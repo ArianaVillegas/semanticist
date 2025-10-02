@@ -387,6 +387,135 @@ def main_worker(rank, world_size, args):
     cleanup_ddp()
 
 
+def single_device_training(args):
+    """Simple single-device training (no DDP)"""
+    device = torch.device(args.device)
+    
+    # Create model
+    model = SlotCoCa(
+        num_slots=args.num_slots,
+        num_layers=args.num_layers,
+        encoder_name=args.encoder_name,
+        projection_dim=args.projection_dim,
+        temperature=args.temperature
+    ).to(device)
+    
+    # Prepare data
+    use_coco = args.use_coco if hasattr(args, 'use_coco') else False
+    
+    if use_coco:
+        if not COCO_AVAILABLE:
+            raise RuntimeError("COCO not available! Install: pip install pycocotools")
+        print(f"📁 Using COCO from {args.data_dir}")
+        train_dataset = COCOCaptionsDataset(
+            root_dir=Path(args.data_dir) / 'train2017',
+            ann_file=Path(args.data_dir) / 'annotations' / 'captions_train2017.json',
+            captions_per_image=5
+        )
+        current_collate_fn = collate_fn_coco
+    else:
+        print(f"📁 Using Imagenette from {args.data_dir}")
+        train_dataset = ImagenetteWithCaptions(
+            imagenette_root=args.data_dir,
+            split='train',
+            captions_per_image=5
+        )
+        current_collate_fn = collate_fn
+    
+    # Limit samples if specified
+    if args.num_samples:
+        print(f"⚠️  Limiting to {args.num_samples} samples")
+        train_dataset = torch.utils.data.Subset(train_dataset, range(min(args.num_samples, len(train_dataset))))
+    
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=current_collate_fn,
+        num_workers=args.num_workers
+    )
+    
+    # Optimizer
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=args.lr,
+        weight_decay=args.weight_decay
+    )
+    
+    # Training loop
+    Path(args.checkpoint_dir).mkdir(parents=True, exist_ok=True)
+    
+    for epoch in range(args.epochs):
+        model.train()
+        total_loss = 0
+        
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{args.epochs}")
+        for batch in pbar:
+            images = batch['images'].to(device)
+            captions = batch['captions']
+            
+            # Tokenize captions
+            caption_tokens = model.tokenizer(
+                captions,
+                padding=True,
+                truncation=True,
+                max_length=77,
+                return_tensors='pt'
+            ).to(device)
+            
+            # Forward pass
+            outputs = model(
+                images=images,
+                text_tokens=caption_tokens,
+                caption_tokens=caption_tokens,
+                mode='all'
+            )
+            
+            # Combined loss
+            loss = (
+                args.lambda_recon * outputs.get('recon_loss', 0) +
+                args.lambda_contrast * outputs.get('contrast_loss', 0) +
+                args.lambda_caption * outputs.get('caption_loss', 0)
+            )
+            
+            # Backward
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            
+            total_loss += loss.item()
+            pbar.set_postfix({
+                'loss': f"{loss.item():.4f}",
+                'recon': f"{outputs.get('recon_loss', 0):.4f}",
+                'contrast': f"{outputs.get('contrast_loss', 0):.4f}",
+                'caption': f"{outputs.get('caption_loss', 0):.4f}"
+            })
+        
+        avg_loss = total_loss / len(train_loader)
+        print(f"Epoch {epoch+1}: avg_loss={avg_loss:.4f}")
+        
+        # Save checkpoint
+        if (epoch + 1) % args.save_interval == 0:
+            checkpoint_path = Path(args.checkpoint_dir) / f"checkpoint_epoch_{epoch+1}.pt"
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'args': vars(args)
+            }, checkpoint_path)
+            print(f"💾 Saved checkpoint: {checkpoint_path}")
+    
+    # Save final model
+    final_path = Path(args.checkpoint_dir) / "best_model.pt"
+    torch.save({
+        'epoch': args.epochs,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'args': vars(args)
+    }, final_path)
+    print(f"✅ Training complete! Saved to {final_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Train Slot-CoCa')
     
@@ -420,28 +549,47 @@ def main():
     parser.add_argument('--log_interval', type=int, default=100)
     parser.add_argument('--save_interval', type=int, default=5)
     
+    # Device args
+    parser.add_argument('--device', type=str, default='cuda', choices=['cuda', 'cpu'], help='Device to use')
+    parser.add_argument('--single_device', action='store_true', help='Use single device (no DDP)')
+    
     # DDP args
-    parser.add_argument('--world_size', type=int, default=2, help='Number of GPUs')
+    parser.add_argument('--world_size', type=int, default=1, help='Number of GPUs for DDP')
     
     args = parser.parse_args()
     
     print("="*60)
     print("SLOT-COCA MULTIMODAL TRAINING")
     print("="*60)
-    print(f"GPUs: {args.world_size}")
-    print(f"Batch size per GPU: {args.batch_size}")
-    print(f"Total batch size: {args.batch_size * args.world_size}")
-    print(f"Subset size: {args.subset_size}")
-    print(f"Epochs: {args.epochs}")
-    print("="*60)
     
-    # Launch DDP
-    torch.multiprocessing.spawn(
-        main_worker,
-        args=(args.world_size, args),
-        nprocs=args.world_size,
-        join=True
-    )
+    # Single device training (CPU or single GPU)
+    if args.single_device or args.device == 'cpu':
+        print(f"Device: {args.device}")
+        print(f"Batch size: {args.batch_size}")
+        if args.num_samples:
+            print(f"Samples: {args.num_samples}")
+        print(f"Epochs: {args.epochs}")
+        print("="*60)
+        
+        # Run single-device training
+        single_device_training(args)
+    else:
+        # DDP training
+        print(f"GPUs: {args.world_size}")
+        print(f"Batch size per GPU: {args.batch_size}")
+        print(f"Total batch size: {args.batch_size * args.world_size}")
+        if args.num_samples:
+            print(f"Samples: {args.num_samples}")
+        print(f"Epochs: {args.epochs}")
+        print("="*60)
+        
+        # Launch DDP
+        torch.multiprocessing.spawn(
+            main_worker,
+            args=(args.world_size, args),
+            nprocs=args.world_size,
+            join=True
+        )
 
 
 if __name__ == '__main__':
