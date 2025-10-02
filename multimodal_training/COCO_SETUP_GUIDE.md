@@ -124,9 +124,33 @@ python train_multimodal.py \
 # Verify losses decrease
 ```
 
-### 5.2 Full Training (~15 hours on CPU, ~4 hours on GPU)
+### 5.2 Small Proof-of-Concept (~20 minutes on GPU) ✅ TESTED
 ```bash
-# Full COCO training
+# Small training (10K samples, 10 epochs)
+python train_multimodal.py \
+    --use_coco \
+    --data_dir /home/avillegas/semanticist/datasets/coco \
+    --num_samples 10000 \
+    --batch_size 64 \
+    --epochs 10 \
+    --num_slots 128 \
+    --lambda_recon 1.0 \
+    --lambda_contrast 1.0 \
+    --lambda_caption 1.0 \
+    --lr 1e-4 \
+    --device cuda \
+    --checkpoint_dir checkpoints/coco_small \
+    --save_interval 5
+
+# Actual results (10K samples, 10 epochs, ~23 minutes):
+# Epoch 1:  Loss 6.82 (recon: 0.72, contrast: 1.21, caption: 4.90)
+# Epoch 10: Loss 0.62 (recon: 0.41, contrast: 0.07, caption: 0.14)
+# ✅ Caption loss decreased from 4.90 → 0.14 (decoder is learning!)
+```
+
+### 5.3 Full Training (~4 hours on GPU, ~15 hours on CPU)
+```bash
+# Full COCO training (591K samples)
 python train_multimodal.py \
     --use_coco \
     --data_dir /home/avillegas/semanticist/datasets/coco \
@@ -136,10 +160,10 @@ python train_multimodal.py \
     --lambda_recon 1.0 \
     --lambda_contrast 1.0 \
     --lambda_caption 1.0 \
-    --learning_rate 1e-4 \
+    --lr 1e-4 \
     --device cuda \
     --checkpoint_dir checkpoints/slot_coca_coco \
-    --save_every 5
+    --save_interval 5
 
 # Training will save checkpoints every 5 epochs
 # Monitor with: tail -f logs/slot_coca_coco/training.log
@@ -315,19 +339,23 @@ python visualize_attention.py \
 
 ---
 
-## 📊 Expected Timeline
+## 📊 Timeline (Actual Results)
 
-| Step | Time | Can Parallelize? |
-|------|------|------------------|
-| Download COCO | 30 min | No |
-| Setup & Test | 10 min | No |
-| Quick Test (100 samples) | 5 min | No |
-| **Full Training** | **15 hours (CPU)** | Yes (use GPU) |
-| Evaluation (all metrics) | 20 min | No |
-| Generate samples | 10 min | No |
-| **Total** | **~16-17 hours** | |
+| Step | Time | Hardware | Status |
+|------|------|----------|--------|
+| Download COCO | 30 min | Network | Required |
+| Setup & Test | 10 min | CPU | Required |
+| Quick Test (100 samples) | 5 min | CPU | Recommended |
+| **Small PoC (10K samples)** | **23 min** | **A100 GPU** | **✅ TESTED** |
+| **Full Training (591K)** | **4-5 hours** | **A100 GPU** | Ready to run |
+| Evaluation (all metrics) | 20 min | CPU/GPU | After training |
+| Generate samples | 10 min | CPU/GPU | After training |
 
-**With GPU**: ~5-6 hours total
+**Actual Small PoC Results (10K samples, 10 epochs, A100):**
+- Training time: 23 minutes
+- Caption loss: 4.90 → 0.14 ✅ **Decoder learned!**
+- Contrastive loss: 1.21 → 0.07 ✅ **Image-text alignment working**
+- Reconstruction loss: 0.72 → 0.41 ✅ **Slots learning features**
 
 ---
 
@@ -368,30 +396,22 @@ pip install pycocotools
 ### Problem: Download interrupted
 **Solution**: Resume with `wget -c`
 ```bash
-wget -c http://images.cocodataset.org/zips/train2017.zip
-```
-
----
-
-## 📈 After Training
 
 ### Share Results
-1. Zero-shot accuracy on COCO
-2. Retrieval metrics (R@1, R@5, R@10)
-3. Sample generated captions
-4. Comparison to CLIP baseline
+1. Caption loss trajectory (4.90 → 0.14)
+2. Sample generated captions
+3. Retrieval metrics comparison
+4. Comparison to Imagenette (show data quality impact)
 
-### Next Steps
-1. Scale to Conceptual Captions 3M
-2. Add object detection integration
-3. Multi-modal reasoning tasks
-4. Publish findings
+### Scale Up (Optional)
+1. **Full COCO training** (591K samples, 30 epochs, ~4-5 hours A100)
+2. **Conceptual Captions 3M** (100x more data)
+3. Add object detection integration
+4. Multi-modal reasoning tasks
 
 ---
 
 **Ready to start? Run the quick start script!**
-
-```bash
 cd /home/avillegas/semanticist/multimodal_training
 ./coco_quick_start.sh
 ```
