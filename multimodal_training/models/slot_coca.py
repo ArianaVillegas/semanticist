@@ -146,10 +146,17 @@ class SlotCoCa(nn.Module):
             # Use slots as memory for cross-attention
             caption_embeds = self.encode_text(caption_tokens)
             
+            # Create causal mask (decoder can't see future tokens)
+            seq_len = caption_embeds.size(1)
+            causal_mask = torch.nn.Transformer.generate_square_subsequent_mask(
+                seq_len, device=images.device
+            )
+            
             # Autoregressive decoding with cross-attention to slots
             decoded = self.caption_decoder(
                 tgt=caption_embeds,
-                memory=slots
+                memory=slots,
+                tgt_mask=causal_mask  # Prevent looking ahead!
             )
             
             # Predict next tokens
@@ -170,12 +177,12 @@ class SlotCoCa(nn.Module):
     
     @torch.no_grad()
     def generate_caption(self, images, max_length=50, num_beams=3):
-        """Generate captions for images using beam search"""
+        """Generate captions for images using greedy decoding"""
         self.eval()
         batch_size = images.shape[0]
         device = images.device
         
-        # Encode image
+        # Encode image to slots
         slots, _ = self.encode_image(images)
         
         # Start with [CLS] token
@@ -186,18 +193,31 @@ class SlotCoCa(nn.Module):
             device=device
         )
         
-        # Greedy decoding (can be improved with beam search)
-        for _ in range(max_length):
-            # Encode current caption
+        # Greedy autoregressive decoding
+        for step in range(max_length):
+            # Encode current sequence
             outputs = self.text_encoder(input_ids=input_ids)
-            caption_embeds = outputs.last_hidden_state
+            caption_embeds = outputs.last_hidden_state  # [B, seq_len, dim]
             
-            # Decode with cross-attention to slots
-            decoded = self.caption_decoder(tgt=caption_embeds, memory=slots)
+            # Create causal mask to prevent looking ahead
+            seq_len = caption_embeds.size(1)
+            causal_mask = torch.nn.Transformer.generate_square_subsequent_mask(
+                seq_len, device=device
+            )
             
-            # Get next token logits
-            logits = self.caption_head(decoded[:, -1])
-            next_token = logits.argmax(dim=-1, keepdim=True)
+            # Decode with cross-attention to slots (memory)
+            # Use causal mask so decoder can't look at future positions
+            decoded = self.caption_decoder(
+                tgt=caption_embeds,
+                memory=slots,
+                tgt_mask=causal_mask
+            )
+            
+            # Get logits for LAST position only (next token prediction)
+            logits = self.caption_head(decoded[:, -1, :])  # [B, vocab_size]
+            
+            # Greedy: take argmax
+            next_token = logits.argmax(dim=-1, keepdim=True)  # [B, 1]
             
             # Append to sequence
             input_ids = torch.cat([input_ids, next_token], dim=1)
