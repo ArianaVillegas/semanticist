@@ -11,8 +11,8 @@ print("="*60)
 print("GENERATION DEBUG")
 print("="*60)
 
-# Load checkpoint
-checkpoint = torch.load('checkpoints/coco_small_fixed/best_model.pt', map_location='cpu')
+# Load checkpoint (use latest retraining)
+checkpoint = torch.load('checkpoints/coco_test_retraining/checkpoint_epoch_4.pt', map_location='cpu')
 model = SlotCoCa(num_slots=128)
 model.load_state_dict(checkpoint['model_state_dict'])
 model.eval()
