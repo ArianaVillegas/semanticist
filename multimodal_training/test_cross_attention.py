@@ -27,7 +27,6 @@ print(f"\nGround truth: {sample['caption']}\n")
 
 # Test 1: Normal generation with real visual slots
 with torch.no_grad():
-    slots = model.image_encoder(image)
     generated_ids = model.generate_caption(image, max_length=10)
     normal_caption = model.tokenizer.decode(generated_ids[0], skip_special_tokens=True)
 
@@ -36,7 +35,7 @@ print(f"With REAL slots:  '{normal_caption}'")
 # Test 2: Replace slots with zeros (no visual information)
 with torch.no_grad():
     # Encode image to get slot shape
-    real_slots = model.image_encoder(image)
+    real_slots, _ = model.encode_image(image)
     
     # Create zero slots (no visual information)
     zero_slots = torch.zeros_like(real_slots)
