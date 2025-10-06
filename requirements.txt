@@ -15,3 +15,8 @@ git+https://github.com/LTH14/torch-fidelity.git@master#egg=torch-fidelity
 opencv-python-headless
 torchmetrics
 submitit
+
+# Multimodal training dependencies
+transformers
+sentence-transformers
+pycocotools
